@@ -330,13 +330,32 @@
     const mapEl = $('map');
     mapEl.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
     mapEl.addEventListener('pointermove', (e) => {
-      if (down && state.follow && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) {
-        state.follow = false;
-        el.follow.checked = false;
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) {
+        down.moved = true;
+        panAnim = null;
+        if (state.follow) { state.follow = false; el.follow.checked = false; }
       }
     });
-    window.addEventListener('pointerup', () => { down = null; });
+    window.addEventListener('pointerup', () => {
+      // Also after +/- button zooms, once their animation has finished.
+      if (down) setTimeout(settleView, down.moved ? 0 : 450);
+      down = null;
+    });
+    // Trackpads zoom in fractions; settle on a whole zoom level when they stop.
+    let wheelTimer = null;
+    mapEl.addEventListener('wheel', () => {
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(settleView, 250);
+    }, { passive: true });
   })();
+
+  function settleView() {
+    if (!mapChart) return;
+    const mv = mapChart.mapView;
+    if (Math.abs(mv.zoom - Math.round(mv.zoom)) > 1e-6) mv.setView(mv.center, Math.round(mv.zoom), false);
+    mapChart.redraw(false);
+    if (snapToPixelGrid()) mapChart.redraw(false);
+  }
 
   el.tiles.addEventListener('change', () => {
     tileProvider = el.tiles.value;
@@ -358,6 +377,84 @@
     const b = anchor.bbox;
     return !(a.bbox[2] < b[0] - latPad || a.bbox[0] > b[2] + latPad ||
              a.bbox[3] < b[1] - lngPad || a.bbox[1] > b[3] + lngPad);
+  }
+
+  let lastBoxKey = '';
+
+  function ensureMapChart() {
+    if (mapChart) return;
+    mapChart = Highcharts.mapChart('map', {
+      chart: { animation: false, margin: 0, style: { fontFamily: 'inherit' } },
+      title: { text: undefined },
+      legend: { enabled: false },
+      credits: { position: { align: 'right', x: -6, y: -4 }, style: { fontSize: '10px' } },
+      mapNavigation: {
+        enabled: true,
+        enableMouseWheelZoom: true,
+        mouseWheelSensitivity: 2, // one wheel notch = one whole zoom level
+        buttonOptions: { align: 'left', verticalAlign: 'top', x: 10, y: 10 }
+      },
+      mapView: {
+        center: [10.75, 59.91],
+        zoom: 4,
+        // Pan limits = the whole world, not the routes. Otherwise Highcharts
+        // pins the centre to the routes whenever they fit in the view.
+        fitToGeometry: { type: 'MultiPoint', coordinates: [[-180, -85], [180, 85]] }
+      },
+      tooltip: { headerFormat: '', hideDelay: 100 },
+      plotOptions: {
+        series: { animation: false, states: { inactive: { opacity: 1 }, hover: { enabled: false } } },
+        mapline: { enableMouseTracking: false, zIndex: 1 },
+        mappoint: { zIndex: 2 }
+      },
+      series: [
+        { type: 'tiledwebmap', name: 'Tiles', provider: TILE_PROVIDERS[tileProvider], enableMouseTracking: false, zIndex: 0 }
+      ]
+    });
+    Highcharts.addEvent(mapChart, 'render', crispTiles);
+  }
+
+  // Tiles only render 1:1 at whole zoom levels (Highcharts uses tiles from
+  // floor(zoom) and scales them), so fit the routes at an integer zoom.
+  function fitMap(box) {
+    const mv = mapChart.mapView;
+    const sw = mv.lonLatToProjectedUnits({ lon: box[1], lat: box[0] });
+    const ne = mv.lonLatToProjectedUnits({ lon: box[3], lat: box[2] });
+    mv.fitToBounds({ x1: Math.min(sw.x, ne.x), y1: Math.min(sw.y, ne.y), x2: Math.max(sw.x, ne.x), y2: Math.max(sw.y, ne.y) }, 40, false);
+    mv.setView(mv.center, Math.floor(mv.zoom), false);
+    mapChart.redraw(false);
+    snapToPixelGrid();
+  }
+
+  // Shift the view by the sub-pixel remainder so tile edges land on whole
+  // pixels. Reads an actual tile's position, so call it after a redraw.
+  function snapToPixelGrid() {
+    const mv = mapChart.mapView;
+    const zoom = Math.round(mv.zoom);
+    if (Math.abs(mv.zoom - zoom) > 1e-6) return false;
+    const level = mapChart.series[0].tiles && mapChart.series[0].tiles[zoom];
+    const tile = level && Object.values(level.tiles)[0];
+    if (!tile) return false;
+    const x = Number(tile.attr('x')), y = Number(tile.attr('y'));
+    const fx = x - Math.round(x), fy = y - Math.round(y);
+    if (Math.abs(fx) < 0.005 && Math.abs(fy) < 0.005) return false;
+    const c = mv.pixelsToLonLat({ x: mapChart.plotWidth / 2 + fx, y: mapChart.plotHeight / 2 + fy });
+    if (!c) return false;
+    mv.setView([c.lon, c.lat], zoom, false);
+    return true;
+  }
+
+  // Highcharts draws each tile 1px larger than its slot to hide seams when
+  // tiles are scaled. At 1:1 that 1px stretch blurs them, so undo it.
+  function crispTiles() {
+    const mv = mapChart.mapView;
+    if (Math.abs(mv.zoom - Math.round(mv.zoom)) > 1e-6) return;
+    const group = mapChart.series[0] && mapChart.series[0].group;
+    if (!group) return;
+    group.element.querySelectorAll('image').forEach((img) => {
+      if (img.getAttribute('width') === '257') img.setAttribute('width', '256');
+      if (img.getAttribute('height') === '257') img.setAttribute('height', '256');
+    });
   }
 
   function rebuildMap() {
@@ -399,9 +496,7 @@
         }, {
           enabled: true, allowOverlap: false, align: 'left', verticalAlign: 'middle', x: 16, y: 0,
           formatter: () => esc(a.label),
-          backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 3, padding: 3,
-          shadow: { color: 'rgba(0,0,0,0.25)', offsetX: 0, offsetY: 1, width: 3 },
-          style: { color: '#242428', textOutline: 'none', fontSize: '11px', fontWeight: '600' }
+          style: { color: a.color, textOutline: '2px #fff', fontSize: '11px', fontWeight: '600' }
         }]
       });
       mapRefs.push({ progressId: 'progress' + idx, markerId: 'marker' + idx, coords, step, lastProgress: 0 });
@@ -410,34 +505,16 @@
       box[2] = Math.max(box[2], a.bbox[2]); box[3] = Math.max(box[3], a.bbox[3]);
     });
 
-    const mapView = isFinite(box[0])
-      ? { fitToGeometry: { type: 'MultiPoint', coordinates: [[box[1], box[0]], [box[3], box[2]]] }, padding: 40 }
-      : { center: [10.75, 59.91], zoom: 4 };
-
-    if (mapChart) mapChart.destroy();
-    mapChart = Highcharts.mapChart('map', {
-      chart: { animation: false, margin: 0, style: { fontFamily: 'inherit' } },
-      title: { text: undefined },
-      legend: { enabled: false },
-      credits: { position: { align: 'right', x: -6, y: -4 }, style: { fontSize: '10px' } },
-      mapNavigation: {
-        enabled: true,
-        enableMouseWheelZoom: true,
-        buttonOptions: { align: 'left', verticalAlign: 'top', x: 10, y: 10 }
-      },
-      mapView,
-      tooltip: { headerFormat: '', hideDelay: 100 },
-      plotOptions: {
-        series: { animation: false, states: { inactive: { opacity: 1 }, hover: { enabled: false } } },
-        mapline: { enableMouseTracking: false, zIndex: 1 },
-        mappoint: { zIndex: 2 }
-      },
-      series: [
-        { type: 'tiledwebmap', name: 'Tiles', provider: TILE_PROVIDERS[tileProvider], enableMouseTracking: false, zIndex: 0 },
-        ...lines,
-        ...markers
-      ]
-    });
+    ensureMapChart();
+    // Swap the racer series in place, so the tile layer isn't re-created.
+    mapChart.series.slice(1).forEach((series) => series.remove(false));
+    [...lines, ...markers].forEach((opts) => mapChart.addSeries(opts, false));
+    const boxKey = box.join(',');
+    if (isFinite(box[0]) && boxKey !== lastBoxKey) {
+      lastBoxKey = boxKey;
+      fitMap(box);
+    }
+    mapChart.redraw(false);
 
     const notes = [];
     if (far.length) notes.push(`Not on map (too far from the primary route): ${far.map((a) => a.name).join(', ')}`);
@@ -704,7 +781,7 @@
   }
 
   let lastChartUpdate = 0;
-  let lastPan = 0;
+  let panAnim = null; // { from, to, start, dur } while the map slides
 
   function render(force) {
     const T = state.T;
@@ -730,13 +807,22 @@
       positions.forEach((p, idx) => { if (mapRefs[idx] && p.ll && p.d > leaderD) { leaderD = p.d; leaderLL = p.ll; } });
     }
     if (mapChart) {
-      if (state.follow && state.playing && leaderLL && now - lastPan > 700) {
+      if (state.follow && state.playing && leaderLL && !panAnim) {
         const px = mapChart.mapView.lonLatToPixels({ lon: leaderLL[1], lat: leaderLL[0] });
         const w = mapChart.plotWidth, h = mapChart.plotHeight;
         if (px && (px.x < w * 0.2 || px.x > w * 0.8 || px.y < h * 0.2 || px.y > h * 0.8)) {
-          lastPan = now;
-          mapChart.mapView.setView([leaderLL[1], leaderLL[0]], undefined, false, { duration: 500 });
+          panAnim = { from: mapChart.mapView.center.slice(), to: [leaderLL[1], leaderLL[0]], start: now, dur: 800 };
         }
+      }
+      if (panAnim) {
+        // Ease the map centre towards the target, a frame at a time, so the
+        // slide stays in step with the racer markers.
+        const k = Math.min(1, (now - panAnim.start) / panAnim.dur);
+        const e = 0.5 - Math.cos(Math.PI * k) / 2; // ease in-out
+        const { from, to } = panAnim;
+        mapChart.mapView.setView([from[0] + (to[0] - from[0]) * e, from[1] + (to[1] - from[1]) * e], undefined, false);
+        if (k >= 1) { panAnim = null; requestAnimationFrame(() => { if (!panAnim && snapToPixelGrid()) mapChart.redraw(false); }); }
+        else if (!state.playing) requestAnimationFrame(() => render(false));
       }
       mapChart.redraw(false);
     }
