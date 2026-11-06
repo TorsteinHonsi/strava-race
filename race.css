@@ -1,0 +1,114 @@
+:root {
+  --orange: #fc4c02;
+  --orange-dark: #e34402;
+  --bg: #f4f4f2;
+  --panel: #ffffff;
+  --text: #242428;
+  --muted: #6d6d78;
+  --border: #e2e2e6;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 var(--font); }
+
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  height: 52px; padding: 0 20px;
+  background: #fff; border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; color: var(--orange); }
+.brand img { width: 24px; height: 24px; }
+.subtitle { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.layout { display: grid; grid-template-columns: 320px 1fr; height: calc(100% - 52px); }
+.sidebar { overflow-y: auto; padding: 16px; border-right: 1px solid var(--border); background: var(--bg); }
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+.panel h2 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+
+.racers { list-style: none; margin: 0; padding: 0; }
+.racers li { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--border); }
+.racers li:first-child { border-top: 0; padding-top: 0; }
+.swatch { width: 14px; height: 14px; border-radius: 50%; margin-top: 3px; }
+.racer-name { font-weight: 600; color: var(--text); text-decoration: none; word-break: break-word; }
+.racer-name:hover { color: var(--orange); }
+.racer-meta { color: var(--muted); font-size: 12px; }
+.badge { display: inline-block; margin-top: 3px; padding: 1px 6px; border-radius: 4px; font-size: 11px; background: #fff3e0; color: #a14400; }
+.badge.primary { background: #ffe4d6; color: var(--orange-dark); }
+.remove { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; padding: 0 2px; }
+.remove:hover { color: #c0262d; }
+
+.add-form { display: flex; gap: 6px; margin-bottom: 10px; }
+.add-form input { flex: 1; min-width: 0; }
+input[type="text"], select {
+  font: inherit; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text);
+}
+select { width: 100%; }
+button { font: inherit; }
+.add-form button {
+  border: 0; border-radius: 6px; padding: 7px 14px; background: var(--orange); color: #fff; font-weight: 600; cursor: pointer;
+}
+.add-form button:hover { background: var(--orange-dark); }
+.add-form button:disabled { opacity: .6; cursor: default; }
+.field { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+.field.inline { flex-direction: row; align-items: center; gap: 6px; }
+.field.inline select { width: auto; }
+.status { margin-top: 8px; font-size: 12px; color: var(--muted); min-height: 1em; }
+.status.error { color: #c0262d; }
+
+.standings { list-style: none; margin: 0; padding: 0; counter-reset: pos; }
+.standings li { display: grid; grid-template-columns: 22px 10px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--border); }
+.standings li:first-child { border-top: 0; }
+.standings .pos { font-weight: 700; color: var(--muted); text-align: right; }
+.standings .dot { width: 10px; height: 10px; border-radius: 50%; }
+.standings .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.standings .who small { display: block; color: var(--muted); font-size: 11px; }
+.standings .gap { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
+.standings .gap small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+
+.map-wrap { position: relative; flex: 1 1 55%; min-height: 240px; }
+#map { position: absolute; inset: 0; }
+.map-note {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 500;
+  background: rgba(255,255,255,.95); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-size: 12px; color: var(--muted);
+  box-shadow: 0 2px 8px rgba(0,0,0,.1); max-width: 90%; text-align: center;
+}
+.chart { flex: 0 0 240px; background: #fff; border-top: 1px solid var(--border); }
+
+.controls {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 10px 16px; background: #fff; border-top: 1px solid var(--border);
+}
+.play {
+  flex: none; width: 46px; height: 46px; border-radius: 50%; border: 0; display: grid; place-items: center;
+  background: var(--orange); color: #fff; cursor: pointer; box-shadow: 0 2px 6px rgba(252,76,2,.35);
+}
+.play:hover { background: var(--orange-dark); }
+.play:disabled { background: #ccc; box-shadow: none; cursor: default; }
+.timeline { flex: 1 1 280px; min-width: 200px; }
+.timeline input { width: 100%; accent-color: var(--orange); margin: 0; }
+.time-row { display: flex; gap: 6px; font-variant-numeric: tabular-nums; }
+.clock { font-weight: 700; font-size: 15px; }
+.total { color: var(--muted); }
+.check { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.check input { accent-color: var(--orange); }
+
+/* Map racer markers */
+.racer-marker {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.45); color: #fff; font: 700 11px/18px var(--font); text-align: center;
+}
+.leaflet-tooltip.racer-tip { font-weight: 600; padding: 2px 6px; }
+
+@media (max-width: 860px) {
+  .layout { grid-template-columns: 1fr; height: auto; }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+  .main { height: 100vh; }
+}
+.field + .field { margin-top: 10px; }
+.racer-sub { font-size: 12px; color: var(--text); }
+.leaflet-tooltip.racer-tip { background: rgba(255,255,255,.92); border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.3); font-size: 11px; }
+.leaflet-tooltip.racer-tip::before { display: none; }

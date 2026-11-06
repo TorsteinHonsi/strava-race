@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Strava Race",
+  "version": "1.0.0",
+  "description": "Race Strava activities against each other on a shared map and elevation profile.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": ["https://www.strava.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.strava.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

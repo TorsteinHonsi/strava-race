@@ -1,0 +1,25 @@
+#strava-race-menu-item a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#strava-race-menu-item .strava-race-flag { color: #fc4c02; flex: none; }
+
+#strava-race-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #fc4c02;
+  color: #fff;
+  font: 600 14px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+#strava-race-fab:hover { background: #e34402; }

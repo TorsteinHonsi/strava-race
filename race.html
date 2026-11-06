@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Strava Race</title>
+  <link rel="icon" href="icons/icon48.png">
+  <link rel="stylesheet" href="lib/leaflet.css">
+  <link rel="stylesheet" href="race.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img src="icons/icon48.png" alt=""> Strava Race</div>
+    <div id="subtitle" class="subtitle"></div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="panel">
+        <h2>Racers</h2>
+        <ul id="racers" class="racers"></ul>
+      </section>
+
+      <section class="panel">
+        <h2>Add an activity</h2>
+        <form id="addForm" class="add-form">
+          <input id="addInput" type="text" placeholder="Strava activity URL or ID" autocomplete="off">
+          <button type="submit">Add</button>
+        </form>
+        <label class="field">
+          <span>…or pick a matched activity (same route)</span>
+          <select id="matched" disabled><option>Loading…</option></select>
+        </label>
+        <label class="field">
+          <span>…or one of your recent activities</span>
+          <select id="recent" disabled><option>Loading…</option></select>
+        </label>
+        <div id="addStatus" class="status" role="status"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Standings</h2>
+        <ol id="standings" class="standings"></ol>
+      </section>
+    </aside>
+
+    <main class="main">
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div id="mapNote" class="map-note" hidden></div>
+      </div>
+      <div id="chart" class="chart"></div>
+
+      <div class="controls">
+        <button id="play" class="play" type="button" aria-label="Play">
+          <svg id="playIcon" viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M7 4.5v15l13-7.5z"/></svg>
+          <svg id="pauseIcon" viewBox="0 0 24 24" width="22" height="22" hidden><path fill="currentColor" d="M6 4h4.5v16H6zm7.5 0H18v16h-4.5z"/></svg>
+        </button>
+        <div class="timeline">
+          <input id="timeline" type="range" min="0" max="0" step="1" value="0" aria-label="Race time">
+          <div class="time-row">
+            <span id="clock" class="clock">0:00:00</span>
+            <span id="total" class="total">/ 0:00:00</span>
+          </div>
+        </div>
+        <label class="field inline">
+          <span>Speed</span>
+          <select id="speed">
+            <option value="1">1×</option>
+            <option value="10">10×</option>
+            <option value="30">30×</option>
+            <option value="60" selected>60×</option>
+            <option value="120">120×</option>
+            <option value="300">300×</option>
+            <option value="600">600×</option>
+          </select>
+        </label>
+        <label class="field inline">
+          <span>Clock</span>
+          <select id="mode">
+            <option value="elapsed">Elapsed time</option>
+            <option value="moving">Moving time</option>
+          </select>
+        </label>
+        <label class="check"><input id="follow" type="checkbox" checked> Follow leader</label>
+      </div>
+    </main>
+  </div>
+
+  <script src="lib/leaflet.js"></script>
+  <script src="lib/highcharts.js"></script>
+  <script src="race.js"></script>
+</body>
+</html>
