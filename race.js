@@ -491,10 +491,12 @@
         tooltip: { pointFormatter: () => `<b>${esc(a.name)}</b><br>${esc(a.subtitle || '')}` },
         dataLabels: [{
           enabled: true, allowOverlap: false, align: 'center', verticalAlign: 'middle', y: 0,
+          labelrank: idx, // later series are drawn on top; keep their labels too
           formatter: () => String(idx + 1),
           style: { color: '#fff', textOutline: 'none', fontSize: '11px', fontWeight: '700' }
         }, {
           enabled: true, allowOverlap: false, align: 'left', verticalAlign: 'middle', x: 16, y: 0,
+          labelrank: idx,
           formatter: () => esc(a.label),
           style: { color: a.color, textOutline: '2px #fff', fontSize: '11px', fontWeight: '600' }
         }]
@@ -546,7 +548,7 @@
         data: [[0, a.alt ? a.alt[0] : 0]],
         marker: { symbol: 'circle', radius: 7, lineWidth: 2, lineColor: '#fff' },
         dataLabels: {
-          enabled: true, formatter: () => esc(a.label), align: 'left', verticalAlign: 'middle', x: 6, y: 0,
+          enabled: true, labelrank: idx, formatter: () => esc(a.label), align: 'left', verticalAlign: 'middle', x: 6, y: 0,
           crop: false, overflow: 'allow',
           style: { color: a.color, fontSize: '11px', fontWeight: '600', textOutline: '2px #fff' }
         },
