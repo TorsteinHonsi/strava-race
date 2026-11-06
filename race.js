@@ -353,8 +353,8 @@
     if (!mapChart) return;
     const mv = mapChart.mapView;
     if (Math.abs(mv.zoom - Math.round(mv.zoom)) > 1e-6) mv.setView(mv.center, Math.round(mv.zoom), false);
-    mapChart.redraw(false);
-    if (snapToPixelGrid()) mapChart.redraw(false);
+    mapChart.mapView.redraw(false);
+    if (snapToPixelGrid()) mapChart.mapView.redraw(false);
   }
 
   el.tiles.addEventListener('change', () => {
@@ -422,7 +422,7 @@
     const ne = mv.lonLatToProjectedUnits({ lon: box[3], lat: box[2] });
     mv.fitToBounds({ x1: Math.min(sw.x, ne.x), y1: Math.min(sw.y, ne.y), x2: Math.max(sw.x, ne.x), y2: Math.max(sw.y, ne.y) }, 40, false);
     mv.setView(mv.center, Math.floor(mv.zoom), false);
-    mapChart.redraw(false);
+    mapChart.mapView.redraw(false);
     snapToPixelGrid();
   }
 
@@ -490,7 +490,7 @@
         enableMouseTracking: true,
         tooltip: { pointFormatter: () => `<b>${esc(a.name)}</b><br>${esc(a.subtitle || '')}` },
         dataLabels: [{
-          enabled: true, allowOverlap: true, align: 'center', verticalAlign: 'middle', y: 0,
+          enabled: true, allowOverlap: false, align: 'center', verticalAlign: 'middle', y: 0,
           formatter: () => String(idx + 1),
           style: { color: '#fff', textOutline: 'none', fontSize: '11px', fontWeight: '700' }
         }, {
@@ -514,7 +514,7 @@
       lastBoxKey = boxKey;
       fitMap(box);
     }
-    mapChart.redraw(false);
+    mapChart.mapView.redraw(false);
 
     const notes = [];
     if (far.length) notes.push(`Not on map (too far from the primary route): ${far.map((a) => a.name).join(', ')}`);
@@ -793,13 +793,14 @@
     positions.forEach((p, idx) => {
       const ref = mapRefs[idx];
       if (!ref || !p.ll) return;
-      mapChart.get(ref.markerId).setData([{ lon: p.ll[1], lat: p.ll[0] }], false, false, false);
+      // Move the existing point (keeps its marker and label elements).
+      mapChart.get(ref.markerId).points[0].update({ lon: p.ll[1], lat: p.ll[0] }, false, false);
       // The trail is costlier to redraw, so update it ~10 times a second.
       if (force || now - ref.lastProgress > 100) {
         ref.lastProgress = now;
         const pts = ref.coords.slice(0, Math.floor(p.i / ref.step) + 1);
         pts.push([p.ll[1], p.ll[0]]);
-        mapChart.get(ref.progressId).setData([{ geometry: { type: 'LineString', coordinates: pts } }], false, false, false);
+        mapChart.get(ref.progressId).points[0].update({ geometry: { type: 'LineString', coordinates: pts } }, false, false);
       }
       if (p.d > leaderD && !p.finished) { leaderD = p.d; leaderLL = p.ll; }
     });
@@ -807,6 +808,7 @@
       positions.forEach((p, idx) => { if (mapRefs[idx] && p.ll && p.d > leaderD) { leaderD = p.d; leaderLL = p.ll; } });
     }
     if (mapChart) {
+      let viewMoved = false;
       if (state.follow && state.playing && leaderLL && !panAnim) {
         const px = mapChart.mapView.lonLatToPixels({ lon: leaderLL[1], lat: leaderLL[0] });
         const w = mapChart.plotWidth, h = mapChart.plotHeight;
@@ -821,10 +823,15 @@
         const e = 0.5 - Math.cos(Math.PI * k) / 2; // ease in-out
         const { from, to } = panAnim;
         mapChart.mapView.setView([from[0] + (to[0] - from[0]) * e, from[1] + (to[1] - from[1]) * e], undefined, false);
-        if (k >= 1) { panAnim = null; requestAnimationFrame(() => { if (!panAnim && snapToPixelGrid()) mapChart.redraw(false); }); }
+        viewMoved = true;
+        if (k >= 1) { panAnim = null; requestAnimationFrame(() => { if (!panAnim && snapToPixelGrid()) mapChart.mapView.redraw(false); }); }
         else if (!state.playing) requestAnimationFrame(() => render(false));
       }
-      mapChart.redraw(false);
+      // After a view change every geometry series (tiles, lines) must be
+      // re-rendered; mapView.redraw marks them dirty. Otherwise only the
+      // updated points are redrawn.
+      if (viewMoved) mapChart.mapView.redraw(false);
+      else mapChart.redraw(false);
     }
 
     // Chart markers (throttled ~30 fps)
@@ -832,7 +839,7 @@
       lastChartUpdate = now;
       positions.forEach((p, idx) => {
         const s = chart.series[idx * 2 + 1];
-        if (s) s.setData([[p.d / 1000, state.activities[idx].alt ? p.alt : 0]], false, false, false);
+        if (s && s.points[0]) s.points[0].update({ x: p.d / 1000, y: state.activities[idx].alt ? p.alt : 0 }, false, false);
       });
       chart.redraw(false);
     }
