@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Strava Race</title>
   <link rel="icon" href="icons/icon48.png">
-  <link rel="stylesheet" href="lib/leaflet.css">
   <link rel="stylesheet" href="race.css">
 </head>
 <body>
@@ -47,6 +46,11 @@
     <main class="main">
       <div class="map-wrap">
         <div id="map"></div>
+        <select id="tiles" class="tile-select" aria-label="Map tiles">
+          <option value="topo">Topographic</option>
+          <option value="osm">OpenStreetMap</option>
+          <option value="satellite">Satellite</option>
+        </select>
         <div id="mapNote" class="map-note" hidden></div>
       </div>
       <div id="chart" class="chart"></div>
@@ -87,8 +91,9 @@
     </main>
   </div>
 
-  <script src="lib/leaflet.js"></script>
   <script src="lib/highcharts.js"></script>
+  <script src="lib/modules/map.js"></script>
+  <script src="lib/modules/tiledwebmap.js"></script>
   <script src="race.js"></script>
 </body>
 </html>

@@ -25,7 +25,7 @@
   const $ = (id) => document.getElementById(id);
   const el = {
     subtitle: $('subtitle'), racers: $('racers'), standings: $('standings'),
-    addForm: $('addForm'), addInput: $('addInput'), recent: $('recent'), matched: $('matched'), addStatus: $('addStatus'),
+    addForm: $('addForm'), addInput: $('addInput'), recent: $('recent'), matched: $('matched'), tiles: $('tiles'), addStatus: $('addStatus'),
     mapNote: $('mapNote'), play: $('play'), playIcon: $('playIcon'), pauseIcon: $('pauseIcon'),
     timeline: $('timeline'), clock: $('clock'), total: $('total'),
     speed: $('speed'), mode: $('mode'), follow: $('follow')
@@ -314,26 +314,36 @@
   // ---------------------------------------------------------------------------
   // Map
   // ---------------------------------------------------------------------------
-  const map = L.map('map', { zoomControl: true, preferCanvas: true });
-  const baseLayers = {
-    'Topographic': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19, attribution: 'Tiles &copy; Esri'
-    }),
-    'OpenStreetMap': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-    }),
-    'Satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19, attribution: 'Tiles &copy; Esri'
-    })
+  // Highcharts Maps with a tiled web map background.
+  const TILE_PROVIDERS = {
+    topo: { type: 'Esri', theme: 'WorldTopoMap' },
+    osm: { type: 'OpenStreetMap', theme: 'Standard' },
+    satellite: { type: 'Esri', theme: 'WorldImagery' }
   };
-  baseLayers.Topographic.addTo(map);
-  L.control.layers(baseLayers, null, { position: 'topright' }).addTo(map);
-  L.control.scale({ imperial: false }).addTo(map);
-  map.setView([59.91, 10.75], 4);
-  // A manual pan/zoom pauses "follow leader" until it's ticked again.
-  map.on('dragstart', () => { if (state.follow) { state.follow = false; el.follow.checked = false; } });
+  const MAP_POINTS = 2000; // max points per track line
+  let mapChart = null;
+  let tileProvider = 'topo';
 
-  let mapLayers = []; // per activity: { track, progress, marker } or null
+  // A manual pan pauses "follow leader" until it's ticked again.
+  (() => {
+    let down = null;
+    const mapEl = $('map');
+    mapEl.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
+    mapEl.addEventListener('pointermove', (e) => {
+      if (down && state.follow && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) {
+        state.follow = false;
+        el.follow.checked = false;
+      }
+    });
+    window.addEventListener('pointerup', () => { down = null; });
+  })();
+
+  el.tiles.addEventListener('change', () => {
+    tileProvider = el.tiles.value;
+    if (mapChart) mapChart.series[0].update({ provider: TILE_PROVIDERS[tileProvider] });
+  });
+
+  let mapRefs = []; // per activity: { progress, marker, coords, step } or null
 
   function anchorActivity() {
     return state.activities.find((a) => a.bbox) || null;
@@ -351,41 +361,83 @@
   }
 
   function rebuildMap() {
-    mapLayers.forEach((l) => { if (l) { l.track.remove(); l.progress.remove(); l.marker.remove(); } });
-    mapLayers = [];
     const anchor = anchorActivity();
     const far = [], noGps = [];
-    let bounds = null;
+    const lines = [], markers = [];
+    const box = [Infinity, Infinity, -Infinity, -Infinity]; // minLat, minLon, maxLat, maxLon
+    mapRefs = [];
 
     state.activities.forEach((a, idx) => {
       a.onMap = isNear(anchor, a);
       if (!a.latlng) noGps.push(a);
       else if (!a.onMap) far.push(a);
-      if (!a.onMap) { mapLayers.push(null); return; }
+      if (!a.onMap) { mapRefs.push(null); return; }
 
-      const track = L.polyline(a.latlng, { color: a.color, weight: 3, opacity: 0.35, interactive: false }).addTo(map);
-      const progress = L.polyline([], { color: a.color, weight: 5, opacity: 0.95, interactive: false }).addTo(map);
-      const marker = L.marker(a.latlng[0], {
-        icon: L.divIcon({
-          className: '',
-          html: `<div class="racer-marker" style="background:${a.color}">${idx + 1}</div>`,
-          iconSize: [22, 22], iconAnchor: [11, 11]
-        }),
-        zIndexOffset: 1000 - idx,
-        title: [a.name, a.subtitle].filter(Boolean).join(' · '),
-        keyboard: false
-      }).addTo(map);
-      marker.bindTooltip(esc(a.label), {
-        permanent: true, direction: 'right', offset: [12, 0], className: 'racer-tip',
-        opacity: 1
+      const step = Math.max(1, Math.ceil(a.n / MAP_POINTS));
+      const coords = [];
+      for (let i = 0; i < a.n; i += step) coords.push([a.latlng[i][1], a.latlng[i][0]]);
+      coords.push([a.latlng[a.n - 1][1], a.latlng[a.n - 1][0]]);
+
+      lines.push({
+        type: 'mapline', id: 'track' + idx, color: Highcharts.color(a.color).setOpacity(0.45).get('rgba'), lineWidth: 3,
+        data: [{ geometry: { type: 'LineString', coordinates: coords } }]
       });
-      mapLayers.push({ track, progress, marker });
+      lines.push({
+        type: 'mapline', id: 'progress' + idx, color: a.color, lineWidth: 5,
+        data: [{ geometry: { type: 'LineString', coordinates: [coords[0], coords[0]] } }]
+      });
+      markers.push({
+        type: 'mappoint', id: 'marker' + idx, color: a.color,
+        data: [{ lon: coords[0][0], lat: coords[0][1] }],
+        marker: { symbol: 'circle', radius: 11, fillColor: a.color, lineColor: '#fff', lineWidth: 2 },
+        enableMouseTracking: true,
+        tooltip: { pointFormatter: () => `<b>${esc(a.name)}</b><br>${esc(a.subtitle || '')}` },
+        dataLabels: [{
+          enabled: true, allowOverlap: true, align: 'center', verticalAlign: 'middle', y: 0,
+          formatter: () => String(idx + 1),
+          style: { color: '#fff', textOutline: 'none', fontSize: '11px', fontWeight: '700' }
+        }, {
+          enabled: true, allowOverlap: false, align: 'left', verticalAlign: 'middle', x: 16, y: 0,
+          formatter: () => esc(a.label),
+          backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 3, padding: 3,
+          shadow: { color: 'rgba(0,0,0,0.25)', offsetX: 0, offsetY: 1, width: 3 },
+          style: { color: '#242428', textOutline: 'none', fontSize: '11px', fontWeight: '600' }
+        }]
+      });
+      mapRefs.push({ progressId: 'progress' + idx, markerId: 'marker' + idx, coords, step, lastProgress: 0 });
 
-      const b = L.latLngBounds([a.bbox[0], a.bbox[1]], [a.bbox[2], a.bbox[3]]);
-      bounds = bounds ? bounds.extend(b) : b;
+      box[0] = Math.min(box[0], a.bbox[0]); box[1] = Math.min(box[1], a.bbox[1]);
+      box[2] = Math.max(box[2], a.bbox[2]); box[3] = Math.max(box[3], a.bbox[3]);
     });
 
-    if (bounds) map.fitBounds(bounds, { padding: [30, 30] });
+    const mapView = isFinite(box[0])
+      ? { fitToGeometry: { type: 'MultiPoint', coordinates: [[box[1], box[0]], [box[3], box[2]]] }, padding: 40 }
+      : { center: [10.75, 59.91], zoom: 4 };
+
+    if (mapChart) mapChart.destroy();
+    mapChart = Highcharts.mapChart('map', {
+      chart: { animation: false, margin: 0, style: { fontFamily: 'inherit' } },
+      title: { text: undefined },
+      legend: { enabled: false },
+      credits: { position: { align: 'right', x: -6, y: -4 }, style: { fontSize: '10px' } },
+      mapNavigation: {
+        enabled: true,
+        enableMouseWheelZoom: true,
+        buttonOptions: { align: 'left', verticalAlign: 'top', x: 10, y: 10 }
+      },
+      mapView,
+      tooltip: { headerFormat: '', hideDelay: 100 },
+      plotOptions: {
+        series: { animation: false, states: { inactive: { opacity: 1 }, hover: { enabled: false } } },
+        mapline: { enableMouseTracking: false, zIndex: 1 },
+        mappoint: { zIndex: 2 }
+      },
+      series: [
+        { type: 'tiledwebmap', name: 'Tiles', provider: TILE_PROVIDERS[tileProvider], enableMouseTracking: false, zIndex: 0 },
+        ...lines,
+        ...markers
+      ]
+    });
 
     const notes = [];
     if (far.length) notes.push(`Not on map (too far from the primary route): ${far.map((a) => a.name).join(', ')}`);
@@ -652,32 +704,44 @@
   }
 
   let lastChartUpdate = 0;
+  let lastPan = 0;
 
   function render(force) {
     const T = state.T;
     const positions = state.activities.map((a) => positionAt(a, T));
 
     // Map markers + progress trail
+    const now = performance.now();
     let leaderLL = null, leaderD = -1;
     positions.forEach((p, idx) => {
-      const layer = mapLayers[idx];
-      if (!layer || !p.ll) return;
-      layer.marker.setLatLng(p.ll);
-      const pts = state.activities[idx].latlng.slice(0, p.i + 1);
-      pts.push(p.ll);
-      layer.progress.setLatLngs(pts);
+      const ref = mapRefs[idx];
+      if (!ref || !p.ll) return;
+      mapChart.get(ref.markerId).setData([{ lon: p.ll[1], lat: p.ll[0] }], false, false, false);
+      // The trail is costlier to redraw, so update it ~10 times a second.
+      if (force || now - ref.lastProgress > 100) {
+        ref.lastProgress = now;
+        const pts = ref.coords.slice(0, Math.floor(p.i / ref.step) + 1);
+        pts.push([p.ll[1], p.ll[0]]);
+        mapChart.get(ref.progressId).setData([{ geometry: { type: 'LineString', coordinates: pts } }], false, false, false);
+      }
       if (p.d > leaderD && !p.finished) { leaderD = p.d; leaderLL = p.ll; }
     });
     if (!leaderLL) { // everyone finished – follow whoever's furthest along
-      positions.forEach((p, idx) => { if (mapLayers[idx] && p.ll && p.d > leaderD) { leaderD = p.d; leaderLL = p.ll; } });
+      positions.forEach((p, idx) => { if (mapRefs[idx] && p.ll && p.d > leaderD) { leaderD = p.d; leaderLL = p.ll; } });
     }
-    if (state.follow && state.playing && leaderLL) {
-      const inner = map.getBounds().pad(-0.2);
-      if (!inner.contains(leaderLL)) map.panTo(leaderLL, { animate: true, duration: 0.5 });
+    if (mapChart) {
+      if (state.follow && state.playing && leaderLL && now - lastPan > 700) {
+        const px = mapChart.mapView.lonLatToPixels({ lon: leaderLL[1], lat: leaderLL[0] });
+        const w = mapChart.plotWidth, h = mapChart.plotHeight;
+        if (px && (px.x < w * 0.2 || px.x > w * 0.8 || px.y < h * 0.2 || px.y > h * 0.8)) {
+          lastPan = now;
+          mapChart.mapView.setView([leaderLL[1], leaderLL[0]], undefined, false, { duration: 500 });
+        }
+      }
+      mapChart.redraw(false);
     }
 
     // Chart markers (throttled ~30 fps)
-    const now = performance.now();
     if (chart && (force || now - lastChartUpdate > 33)) {
       lastChartUpdate = now;
       positions.forEach((p, idx) => {
