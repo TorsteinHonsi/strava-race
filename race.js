@@ -2,7 +2,7 @@
 (() => {
   'use strict';
 
-  const COLORS = ['#fc4c02', '#2563eb', '#16a34a', '#9333ea', '#ca8a04', '#0891b2', '#db2777', '#475569'];
+  const COLORS = ['#fc4c02', '#2563eb', '#16a34a', '#9333ea', '#ca8a04', '#0891b2', '#db2777', '#64748b'];
   const NEAR_KM = 5;          // other tracks must come within this of the primary's area to be mapped
   const CHART_POINTS = 2000;  // max points per elevation series
 
@@ -381,10 +381,18 @@
 
   let lastBoxKey = '';
 
+  // Light/dark: Highcharts' palette follows the page's color-scheme on its
+  // own, so the charts adapt to the system setting without being redrawn.
+  const PALETTE = {
+    light: { backgroundColor: '#ffffff', neutralColor: '#242428' },
+    dark: { backgroundColor: '#232327', neutralColor: '#e6e6ea' }
+  };
+
   function ensureMapChart() {
     if (mapChart) return;
     mapChart = Highcharts.mapChart('map', {
       chart: { animation: false, margin: 0, style: { fontFamily: 'inherit' } },
+      palette: PALETTE,
       title: { text: undefined },
       legend: { enabled: false },
       credits: { position: { align: 'right', x: -6, y: -4 }, style: { fontSize: '10px' } },
@@ -546,11 +554,11 @@
       series.push({
         type: 'scatter', linkedTo: 'p' + idx, name: a.name, color: a.color,
         data: [[0, a.alt ? a.alt[0] : 0]],
-        marker: { symbol: 'circle', radius: 7, lineWidth: 2, lineColor: '#fff' },
+        marker: { symbol: 'circle', radius: 7, lineWidth: 2, lineColor: 'var(--highcharts-background-color)' },
         dataLabels: {
           enabled: true, labelrank: idx, formatter: () => esc(a.label), align: 'left', verticalAlign: 'middle', x: 6, y: 0,
           crop: false, overflow: 'allow',
-          style: { color: a.color, fontSize: '11px', fontWeight: '600', textOutline: '2px #fff' }
+          style: { color: a.color, fontSize: '11px', fontWeight: '600', textOutline: '2px var(--highcharts-background-color)' }
         },
         enableMouseTracking: false, zIndex: 10, animation: false, showInLegend: false
       });
@@ -558,19 +566,19 @@
 
     chart = Highcharts.chart('chart', {
       chart: { animation: false, spacing: [12, 16, 8, 8], style: { fontFamily: 'inherit' } },
+      palette: PALETTE,
       title: { text: undefined },
       credits: { enabled: false },
       legend: { enabled: false },
       xAxis: {
         title: { text: undefined },
         labels: { format: '{value} km' },
-        crosshair: { color: '#9997', width: 1 },
+        crosshair: { width: 1 },
         min: 0
       },
       yAxis: {
         title: { text: undefined },
-        labels: { format: '{value} m' },
-        gridLineColor: '#eee'
+        labels: { format: '{value} m' }
       },
       tooltip: {
         shared: true,
